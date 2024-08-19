@@ -24,18 +24,33 @@ if 'merged_file_path' not in st.session_state:
     st.session_state['merged_file_path'] = None
 
 def setup_paths():
-    global base_path
-    base_path = os.getcwd()  # 獲取當前工作目錄
-    today_date = datetime.now().strftime('%Y%m%d')  # 生成今天的日期，格式為 YYYYMMDD
-    compared_path = os.path.join(base_path, "compared")  # 創建一個存儲比對結果的目錄路徑
-    if not os.path.exists(compared_path):  # 如果這個目錄不存在，就創建它
-        os.makedirs(compared_path)
-    return base_path, today_date, compared_path  # 返回三個路徑/日期變量
+    try:
+        global base_path
+        base_path = st.text_input("請輸入欲存放檔案的資料夾路徑", placeholder=r"例：C:\Users\YCChi13\Desktop\衝突礦產系統資料夾")
+        today_date = datetime.now().strftime('%Y%m%d')  # 生成今天的日期，格式為 YYYYMMDD
+        compared_path = os.path.join(base_path, "compared")  # 創建一個存儲比對結果的目錄路徑
+        if not os.path.exists(compared_path):  
+            os.makedirs(compared_path)
+        return base_path, today_date, compared_path  # 返回三個路徑/日期變量
+    except OSError as e:
+        if e.winerror == 123:  
+            st.warning("路徑不能包含引號 \" 或 \' 或其他無效字符。")
+            st.warning(r"參考格式：C:\Users\YCChi13\Desktop\衝突礦產系統資料夾")
+        else:
+            st.error(f"發生錯誤: {e}")
+        return None, None, None
 
 def download_and_merge_files(base_path, today_date):
     st.header("下載RMI列表並合併華邦檔案")
+    st.markdown("""
+    請創建一個新資料夾，放置以下資料：
+    - Chrome Driver
+        [下載連結](https://storage.googleapis.com/chrome-for-testing-public/127.0.6533.119/win64/chromedriver-win64.zip)
+    - 封裝廠檔案
+    - 供應商檔案
+    """)
 
-    directory_path = st.text_input("請選擇包含封裝廠和供應商檔案的資料夾:", base_path)
+    directory_path = st.text_input("請輸入創建的資料夾路徑:", base_path)
     download_button = st.button("開始下載和合併")
 
     if download_button:
@@ -54,13 +69,15 @@ def download_and_merge_files(base_path, today_date):
             if not os.path.exists(merged_path):
                 os.makedirs(merged_path)
 
+            all_path = os.path.join(base_path, "All")
+
             # 合併文件的函數調用
             merged_df = process_files(directory_path, merged_path)
             st.write("合併的資料表：")
             st.dataframe(merged_df)
 
             # 記錄文件路徑到 session state
-            st.session_state['rmi_file_path'] = os.path.join(base_path, f"RMI_All_{today_date}.xlsx")
+            st.session_state['rmi_file_path'] = os.path.join(all_path, f"RMI_All_{today_date}.xlsx")
             st.session_state['merged_file_path'] = os.path.join(merged_path, f"General_merged_{today_date}.xlsx")
 
 
@@ -155,13 +172,14 @@ def download_and_process_rmi_data(base_path, download_path):
             st.error(f'下載未成功，文件不是 XML 文件: {latest_file}')
             return
         
+        # 直接將新文件保存到 base_path\All 目錄下
+        all_path = os.path.join(base_path, "All")
+        if not os.path.exists(all_path):
+            os.makedirs(all_path)
+        
         new_name = f"All_{os.path.splitext(latest_file)[0]}{os.path.splitext(latest_file)[1]}"
-        new_path = os.path.join(base_path, "RMI_data", new_name)
-        shutil.move(os.path.join(download_path, latest_file), new_path)
         
-        st.success(f'檔案已移動並重命名為: {new_path}')
-        
-        tree = ET.parse(new_path)
+        tree = ET.parse(os.path.join(download_path, latest_file))
         root = tree.getroot()
         namespaces = {'ss': 'urn:schemas-microsoft-com:office:spreadsheet'}
         rows = root.findall(".//ss:Row", namespaces=namespaces)
@@ -174,7 +192,7 @@ def download_and_process_rmi_data(base_path, download_path):
             data.append(row_data)
         
         df = pd.DataFrame(data)
-        excel_file_path = os.path.join(base_path, f"RMI_All_{datetime.now().strftime('%Y%m%d')}.xlsx")
+        excel_file_path = os.path.join(all_path, f"RMI_All_{datetime.now().strftime('%Y%m%d')}.xlsx")
         df.to_excel(excel_file_path, index=False, header=False)
         
         st.success(f"檔案已儲存到 {excel_file_path}")
@@ -225,7 +243,7 @@ def process_smelter_data(rmi_df, merge_df, compared_path, today_date):
     matched_rows['Due Date'] = matched_rows.apply(calculate_due_date, axis=1)
 
     today = datetime.now()
-    days_threshold = 50  
+    days_threshold = 30  
 
     result_text = ""
 
@@ -234,7 +252,7 @@ def process_smelter_data(rmi_df, merge_df, compared_path, today_date):
             if pd.notnull(row['Due Date']):
                 days_diff = (row['Due Date'] - today).days
                 if 0 <= days_diff <= days_threshold:
-                    result_text += f"Smelter ID: {row['Smelter Identification Number Input Column']}, 煉製廠：{row['Smelter Name (1)']}, 來源名稱: {row['Source Name']}, 到期日: {row['Due Date'].strftime('%Y-%m-%d')}\n"
+                    result_text += f"Smelter ID: {row['Smelter Identification Number Input Column']}, 煉製廠：{row['Smelter Name (1)']}, 來源名稱: {row['Source Name']}, 到期日: {row['Due Date'].strftime('%Y-%m-%d')}\n\n"
         return result_text
 
     result_text = check_due_date(unmatched_rows, result_text)
@@ -333,7 +351,7 @@ def create_excel_files(merge_df, compared_path, today_date):
 
 def display_results(num_unmatched, unmatched_path, output_general_path, winbond_path, result_text, num_matched, unmatched_data):
 
-    st.write("### 到期提醒")
+    st.write("### Audit Date到期提醒")
     if result_text:
         st.write(result_text)
     else:
@@ -469,9 +487,11 @@ def compare_general_versions():
 
 def main():
     st.title("衝突礦產比對查詢平台")
-
+    st.header("請先設置一個資料夾，以放置本系統生成之檔案")
     base_path, today_date, compared_path = setup_paths()
-
+    if not base_path:
+        st.info("輸入後，請按Enter送出路徑。")
+        return
     # 導航選項
     navigation = st.sidebar.radio("選擇功能", ["下載RMI列表並合併華邦檔案", "比對華邦礦產地與RMI列表", "比較 General 版本"])
 
