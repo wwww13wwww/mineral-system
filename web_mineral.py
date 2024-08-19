@@ -10,7 +10,6 @@ from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException
 from datetime import datetime
 import ssl
 import re
@@ -44,8 +43,6 @@ def download_and_merge_files(base_path, today_date):
     st.header("下載RMI列表並合併華邦檔案")
     st.markdown("""
     請創建一個新資料夾，放置以下資料：
-    - Chrome Driver
-        [下載連結](https://storage.googleapis.com/chrome-for-testing-public/127.0.6533.119/win64/chromedriver-win64.zip)
     - 封裝廠檔案
     - 供應商檔案
     """)
@@ -293,7 +290,7 @@ def create_excel_files(merge_df, compared_path, today_date):
 
     # Creating Winbond versions
     global winbond_path
-    winbond_path = os.path.join(compared_path, "winbond公版")
+    winbond_path = os.path.join(base_path, "winbond公版")
     if not os.path.exists(winbond_path):
         os.makedirs(winbond_path)
     
@@ -351,7 +348,7 @@ def create_excel_files(merge_df, compared_path, today_date):
 
 def display_results(num_unmatched, unmatched_path, output_general_path, winbond_path, result_text, num_matched, unmatched_data):
 
-    st.write("### Audit Date到期提醒")
+    st.write("### Audit Date到期提醒（近30日）")
     if result_text:
         st.write(result_text)
     else:
@@ -380,20 +377,21 @@ def compare_versions(version_1, version_2, general_path, st):
         st.write("新增的 Smelter ID:")
         for smelter_id in changes['新增']:
             metal = version_2_df.loc[version_2_df['Smelter Identification Number Input Column'] == smelter_id, 'Metal (*)'].values[0]
-            source_name = version_2_df.loc[version_2_df['Smelter IdentificationNumber Input Column'] == smelter_id, 'Company Name'].values[0]
+            source_name = version_2_df.loc[version_2_df['Smelter Identification Number Input Column'] == smelter_id, 'Source Name'].values[0]
             st.write(f"Smelter ID: {smelter_id}, Metal: {metal}, Source Name: {source_name}")
 
     if changes['移除']:
         st.write("移除的 Smelter ID:")
         for smelter_id in changes['移除']:
             metal = version_1_df.loc[version_1_df['Smelter Identification Number Input Column'] == smelter_id, 'Metal (*)'].values[0]
-            source_name = version_1_df.loc[version_1_df['Smelter Identification Number Input Column'] == smelter_id, 'Company Name'].values[0]
+            source_name = version_1_df.loc[version_1_df['Smelter Identification Number Input Column'] == smelter_id, 'Source Name'].values[0]
             st.write(f"Smelter ID: {smelter_id}, Metal: {metal}, Source Name: {source_name}")
 
     if not changes['新增'] and not changes['移除']:
         st.write("沒有 Smelter ID 的變化。")
 
 def find_smelter_id(smelter_id_to_find, rmi_df, merge_df, st):
+    smelter_id_to_find = smelter_id_to_find.strip()
     if not smelter_id_to_find:
         st.warning("請輸入 Smelter ID！")
         return
@@ -461,7 +459,9 @@ def compare_mineral_sources(compared_path, today_date):
         # 顯示結果
         display_results(num_unmatched, unmatched_path, output_general_path, winbond_path, result_text, num_matched, unmatched_data)
 
-        smelter_id_to_find = st.text_input("輸入 Smelter ID 進行查找:")
+        smelter_id_to_find = st.text_input(
+    "輸入 Smelter ID 進行查找：",
+    placeholder="請輸入完整的 Smelter ID，例如：CID001149")
         if st.button("查找"):
             find_smelter_id(smelter_id_to_find, rmi_df, merge_df, st)
     else:
@@ -487,7 +487,13 @@ def compare_general_versions():
 
 def main():
     st.title("衝突礦產比對查詢平台")
-    st.header("請先設置一個資料夾，以放置本系統生成之檔案")
+    st.header("請先設置一個系統資料夾，以放置本系統生成之檔案")
+    st.markdown("""
+    在系統資料夾，放置以下資料：
+    - Chrome Driver
+        [下載連結](https://storage.googleapis.com/chrome-for-testing-public/127.0.6533.119/win64/chromedriver-win64.zip)
+    - RMI 提供 CMRT 空表格
+    """)
     base_path, today_date, compared_path = setup_paths()
     if not base_path:
         st.info("輸入後，請按Enter送出路徑。")
