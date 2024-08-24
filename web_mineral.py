@@ -353,16 +353,17 @@ def create_excel_files(merge_df, compared_path, today_date):
 
 def display_results(num_unmatched, unmatched_path, output_general_path, winbond_path, result_text, num_matched, unmatched_data):
 
-    st.write("###🚨 Audit Date到期提醒（近30日）")
+    st.subheader("🚨 Audit Date到期提醒（近30日）")
     if result_text:
         st.write(result_text)
     else:
         st.write("所有檔案已成功生成並儲存，無接近到期的記錄。")
 
-    st.write("### 生成的檔案")
-    st.write(f"上傳檔案不符RMI的 Smelter ID 數量: {num_unmatched}")
-    st.write(f"上傳檔案不符RMI的資料: {unmatched_data}")
-    st.write(f"上傳檔案符合RMI的 Smelter ID 數量: {num_matched}")
+    st.subheader("比對結果")
+    st.markdown(f"<p style='color:red; font-weight:bold;'>上傳檔案不符RMI的 Smelter ID 數量: {num_unmatched}</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:orange; font-weight:bold;'>上傳檔案不符RMI的資料: {unmatched_data}</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='color:green; font-weight:bold;'>上傳檔案符合RMI的 Smelter ID 數量: {num_matched}</p>", unsafe_allow_html=True)
+    st.subheader("自動生成OI")
     st.write(f"與RMI不符的資料保存於：[{unmatched_path}](file://{unmatched_path})")
     st.write(f"含來源名稱的 General 檔案保存於：[{output_general_path}](file://{output_general_path})")
     st.write(f"Winbond 公版保存於：[{winbond_path}](file://{winbond_path})")
@@ -423,7 +424,7 @@ def find_smelter_id(smelter_id_to_find, rmi_df, merge_df, st):
         st.write(f"在供應商/Subcon檔案中未找到 Smelter ID {smelter_id_to_find} 的資料")
 def compare_mineral_sources(compared_path, today_date):
     st.header("比對華邦與RMI礦產地")
-
+    st.markdown("<hr style='border: 1px solid lightgray;'>", unsafe_allow_html=True)
     rmi_file_path = st.session_state.get('rmi_file_path')
     merge_file_path = st.session_state.get('merged_file_path')
 
@@ -470,9 +471,8 @@ def compare_mineral_sources(compared_path, today_date):
         # 顯示結果
         display_results(num_unmatched, unmatched_path, output_general_path, winbond_path, result_text, num_matched, unmatched_data)
 
-        smelter_id_to_find = st.text_input(
-    "輸入 Smelter ID 進行查找：",
-    placeholder="請輸入完整的 Smelter ID，例如：CID001149")
+        st.subheader("輸入 Smelter ID 進行查找")
+        smelter_id_to_find = st.text_input( '',placeholder="請輸入完整的 Smelter ID，例如：CID001149")
         if st.button("查找"):
             find_smelter_id(smelter_id_to_find, rmi_df, merge_df, st)
     else:
@@ -497,16 +497,13 @@ def compare_general_versions():
 
 def main():
     logo_path = "winbond.png"  # 替換成你的 logo 圖片路徑
-    col1, col2 = st.columns([2, 6])  # 調整列的寬度
+    col1, col2 = st.columns([1.8, 6])  # 調整列的寬度
 
     with col1:
         # 使用 PIL 打開圖片，確保圖片品質
         logo = Image.open(logo_path)
         st.image(logo, use_column_width=True) # 使用 st.image() 來顯示 logo
-
-    #with col2:
-        #st.title("🔍 衝突礦產比對查詢平台")  # 主標題s
-
+    st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
     st.markdown("<h2 style='text-align: left;'>🔍 衝突礦產比對查詢平台</h2>", unsafe_allow_html=True)
     st.markdown('<h4 style="color:#4a4a4a;">請先設置一個系統資料夾，以放置本系統生成之檔案</h4>', unsafe_allow_html=True)
     st.markdown("""
