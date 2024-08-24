@@ -233,11 +233,19 @@ def process_smelter_data(rmi_df, merge_df, compared_path, today_date):
         audit_cycle = row['Audit Cycle']
 
         if pd.notnull(last_audit_date) and pd.notnull(audit_cycle):
-            last_audit_date = pd.to_datetime(last_audit_date)
-
-            cycle_years = int(re.search(r'\d+', audit_cycle).group())  # 提取年份數字
-            due_date = last_audit_date + pd.DateOffset(years=cycle_years)
-            return due_date
+            last_audit_date = pd.to_datetime(last_audit_date, errors='coerce')
+            if pd.isnull(last_audit_date):
+                print(f"Invalid date format for Smelter ID: {row['Smelter Identification Number Input Column']}")
+                return None
+            cycle_years_match = re.search(r'\d+', audit_cycle)
+            if cycle_years_match:
+                cycle_years = int(cycle_years_match.group())
+                due_date = last_audit_date + pd.DateOffset(years=cycle_years)
+                print(f"Calculated Due Date for Smelter ID: {row['Smelter Identification Number Input Column']} is {due_date}")
+                return due_date
+            else:
+                print(f"No valid cycle years found for Smelter ID: {row['Smelter Identification Number Input Column']}")
+                return None
         else:
             return None
 
@@ -245,27 +253,41 @@ def process_smelter_data(rmi_df, merge_df, compared_path, today_date):
     matched_rows['Due Date'] = matched_rows.apply(calculate_due_date, axis=1)
 
     today = datetime.now()
-    days_threshold = 30  
+    days_threshold = 30
 
-    result_text = ""
+    due_date_result_text = ""
+    compare_result_text = ""
 
-    def check_due_date(df, result_text):
+    def check_due_date(df, due_date_result_text):
         for _, row in df.iterrows():
             if pd.notnull(row['Due Date']):
                 days_diff = (row['Due Date'] - today).days
+                print(f"Smelter ID: {row['Smelter Identification Number Input Column']} has {days_diff} days until due date.")
                 if 0 <= days_diff <= days_threshold:
-                    result_text += f"Smelter ID: {row['Smelter Identification Number Input Column']}, 煉製廠：{row['Smelter Name (1)']}, 來源名稱: {row['Source Name']}, 到期日: {row['Due Date'].strftime('%Y-%m-%d')}\n\n"
-        return result_text
+                    due_date_result_text += (
+                        f"**Smelter ID**: {row['Smelter Identification Number Input Column']}, "
+                        f"**煉製廠**: {row['Smelter Name (1)']}, "
+                        f"**來源名稱**: {row['Source Name']}, "
+                        f"**到期日**: {row['Due Date'].strftime('%Y-%m-%d')}\n\n"
+                    )
+        return due_date_result_text
 
-    result_text = check_due_date(unmatched_rows, result_text)
-    result_text = check_due_date(matched_rows, result_text)
+    due_date_result_text = check_due_date(unmatched_rows, due_date_result_text)
+    due_date_result_text = check_due_date(matched_rows, due_date_result_text)
+
+    compare_result_text += (
+        f"上傳檔案不符RMI的 Smelter ID 數量: {num_unmatched}\n"
+        f"上傳檔案不符RMI的資料: {unmatched_data}\n"
+        f"上傳檔案符合RMI的 Smelter ID 數量: {num_matched}\n"
+    )
+
 
     unmatched_path = os.path.join(compared_path, f"Unmatch_General_RMI_{today_date}.xlsx")
     matched_path = os.path.join(compared_path, f"Match_General_RMI_{today_date}.xlsx")
     unmatched_rows.to_excel(unmatched_path, index=False)
     matched_rows.to_excel(matched_path, index=False)
 
-    return unmatched_rows, matched_rows, unmatched_path, matched_path, result_text, num_unmatched, unmatched_data, num_matched
+    return unmatched_rows, matched_rows, unmatched_path, matched_path, due_date_result_text, compare_result_text, num_unmatched, unmatched_data, num_matched
 
 def create_excel_files(merge_df, compared_path, today_date):
     original_file_path = os.path.join(base_path, "RMI_CMRT_6.4.xlsx")
@@ -351,24 +373,22 @@ def create_excel_files(merge_df, compared_path, today_date):
 
     return output_general_path, winbond_path
 
-def display_results(num_unmatched, unmatched_path, output_general_path, winbond_path, result_text, num_matched, unmatched_data):
-
+def display_results(num_unmatched, unmatched_path, output_general_path, winbond_path, due_date_result_text, compare_result_text, num_matched, unmatched_data):
     st.subheader("🚨 Audit Date到期提醒（近30日）")
-    if result_text:
-        st.write(result_text)
+    if due_date_result_text:
+        st.markdown(due_date_result_text, unsafe_allow_html=True)
     else:
-        st.write("所有檔案已成功生成並儲存，無接近到期的記錄。")
+        st.markdown("沒有即將到期的 Audit Date。")
 
     st.subheader("比對結果")
+    st.markdown(f"<p style='color:green; font-weight:bold;'>上傳檔案符合RMI的 Smelter ID 數量: {num_matched}</p>", unsafe_allow_html=True)
     st.markdown(f"<p style='color:red; font-weight:bold;'>上傳檔案不符RMI的 Smelter ID 數量: {num_unmatched}</p>", unsafe_allow_html=True)
     st.markdown(f"<p style='color:orange; font-weight:bold;'>上傳檔案不符RMI的資料: {unmatched_data}</p>", unsafe_allow_html=True)
-    st.markdown(f"<p style='color:green; font-weight:bold;'>上傳檔案符合RMI的 Smelter ID 數量: {num_matched}</p>", unsafe_allow_html=True)
+
     st.subheader("自動生成OI")
     st.write(f"與RMI不符的資料保存於：[{unmatched_path}](file://{unmatched_path})")
     st.write(f"含來源名稱的 General 檔案保存於：[{output_general_path}](file://{output_general_path})")
     st.write(f"Winbond 公版保存於：[{winbond_path}](file://{winbond_path})")
-
-
 
 def compare_versions(version_1, version_2, general_path, st):
     version_1_df = pd.read_excel(os.path.join(general_path, version_1))
@@ -434,7 +454,7 @@ def compare_mineral_sources(compared_path, today_date):
             merge_df = pd.read_excel(merge_file_path)
 
             # 進行比對並處理的函數調用
-            unmatched_rows, matched_rows, unmatched_path, matched_path, result_text, num_unmatched, unmatched_data, num_matched = process_smelter_data(rmi_df, merge_df, compared_path, today_date)
+            unmatched_rows, matched_rows, unmatched_path, matched_path, due_date_result_text, compare_result_text, num_unmatched, unmatched_data, num_matched = process_smelter_data(rmi_df, merge_df, compared_path, today_date)
 
             # 創建各版本的 Excel 文件
             output_general_path, winbond_path = create_excel_files(merge_df, compared_path, today_date)
@@ -444,7 +464,8 @@ def compare_mineral_sources(compared_path, today_date):
             st.session_state['matched_rows'] = matched_rows
             st.session_state['unmatched_path'] = unmatched_path
             st.session_state['matched_path'] = matched_path
-            st.session_state['result_text'] = result_text
+            st.session_state['due_date_result_text'] = due_date_result_text
+            st.session_state['compare_result_text'] = compare_result_text
             st.session_state['rmi_df'] = rmi_df
             st.session_state['merge_df'] = merge_df
             st.session_state['num_unmatched'] = num_unmatched
@@ -458,7 +479,8 @@ def compare_mineral_sources(compared_path, today_date):
             matched_rows = st.session_state['matched_rows']
             unmatched_path = st.session_state['unmatched_path']
             matched_path = st.session_state['matched_path']
-            result_text = st.session_state['result_text']
+            due_date_result_text = st.session_state['due_date_result_text']
+            compare_result_text = st.session_state['compare_result_text']
             rmi_df = st.session_state['rmi_df']
             merge_df = st.session_state['merge_df']
             output_general_path = st.session_state['output_general_path']
@@ -467,9 +489,8 @@ def compare_mineral_sources(compared_path, today_date):
             num_matched = st.session_state['num_matched']
             winbond_path = st.session_state['winbond_path']
 
-
         # 顯示結果
-        display_results(num_unmatched, unmatched_path, output_general_path, winbond_path, result_text, num_matched, unmatched_data)
+        display_results(num_unmatched, unmatched_path, output_general_path, winbond_path, due_date_result_text, compare_result_text, num_matched, unmatched_data)
 
         st.subheader("輸入 Smelter ID 進行查找")
         smelter_id_to_find = st.text_input( '',placeholder="請輸入完整的 Smelter ID，例如：CID001149")
@@ -496,6 +517,10 @@ def compare_general_versions():
             compare_versions(version_1, version_2, general_path, st)
 
 def main():
+    if 'due_date_result_text' not in st.session_state:
+        st.session_state['due_date_result_text'] = ""
+    if 'compare_result_text' not in st.session_state:
+        st.session_state['compare_result_text'] = ""
     logo_path = "winbond.png"  # 替換成你的 logo 圖片路徑
     col1, col2 = st.columns([1.8, 6])  # 調整列的寬度
 
