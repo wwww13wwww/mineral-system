@@ -17,6 +17,11 @@ import time
 import openpyxl
 from openpyxl.styles import Border, Side
 from openpyxl.utils.dataframe import dataframe_to_rows
+from st_on_hover_tabs import on_hover_tabs
+import streamlit as st
+from PIL import Image
+
+
 if 'rmi_file_path' not in st.session_state:
     st.session_state['rmi_file_path'] = None
 if 'merged_file_path' not in st.session_state:
@@ -40,7 +45,7 @@ def setup_paths():
         return None, None, None
 
 def download_and_merge_files(base_path, today_date):
-    st.header("下載RMI列表並合併華邦檔案")
+    st.header("爬取RMI/合併華邦檔案")
     st.markdown("""
     請創建一個新資料夾，放置以下資料：
     - 封裝廠檔案
@@ -348,7 +353,7 @@ def create_excel_files(merge_df, compared_path, today_date):
 
 def display_results(num_unmatched, unmatched_path, output_general_path, winbond_path, result_text, num_matched, unmatched_data):
 
-    st.write("### Audit Date到期提醒（近30日）")
+    st.write("###🚨 Audit Date到期提醒（近30日）")
     if result_text:
         st.write(result_text)
     else:
@@ -374,19 +379,25 @@ def compare_versions(version_1, version_2, general_path, st):
     changes = {'新增': version_2_ids - version_1_ids, '移除': version_1_ids - version_2_ids}
 
     if changes['新增']:
-        st.write("新增的 Smelter ID:")
+        added_data = []
+        st.write("版本2新增的 Smelter ID:")
         for smelter_id in changes['新增']:
             metal = version_2_df.loc[version_2_df['Smelter Identification Number Input Column'] == smelter_id, 'Metal (*)'].values[0]
             source_name = version_2_df.loc[version_2_df['Smelter Identification Number Input Column'] == smelter_id, 'Source Name'].values[0]
-            st.write(f"Smelter ID: {smelter_id}, Metal: {metal}, Source Name: {source_name}")
+            added_data.append({"Smelter ID": smelter_id, "Metal": metal, "Source Name": source_name})
+        added_df = pd.DataFrame(added_data)
+        st.table(added_df)
 
     if changes['移除']:
-        st.write("移除的 Smelter ID:")
+        st.write("版本2移除的 Smelter ID:")
+        removed_data = []
         for smelter_id in changes['移除']:
             metal = version_1_df.loc[version_1_df['Smelter Identification Number Input Column'] == smelter_id, 'Metal (*)'].values[0]
             source_name = version_1_df.loc[version_1_df['Smelter Identification Number Input Column'] == smelter_id, 'Source Name'].values[0]
-            st.write(f"Smelter ID: {smelter_id}, Metal: {metal}, Source Name: {source_name}")
-
+            removed_data.append({"Smelter ID": smelter_id, "Metal": metal, "Source Name": source_name})
+    
+    removed_df = pd.DataFrame(removed_data)
+    st.table(removed_df)
     if not changes['新增'] and not changes['移除']:
         st.write("沒有 Smelter ID 的變化。")
 
@@ -406,12 +417,12 @@ def find_smelter_id(smelter_id_to_find, rmi_df, merge_df, st):
         st.write(f"Smelter ID {smelter_id_to_find} 不符合RMI")
 
     if not merge_match.empty:
-        st.write(f"在供應商檔案中找到 Smelter ID {smelter_id_to_find} 的資料")
+        st.write(f"在供應商/Subcon檔案中找到 Smelter ID {smelter_id_to_find} 的資料")
         st.dataframe(merge_match)
     else:
-        st.write(f"在供應商檔案中未找到 Smelter ID {smelter_id_to_find} 的資料")
+        st.write(f"在供應商/Subcon檔案中未找到 Smelter ID {smelter_id_to_find} 的資料")
 def compare_mineral_sources(compared_path, today_date):
-    st.header("比對華邦礦產地與RMI列表")
+    st.header("比對華邦與RMI礦產地")
 
     rmi_file_path = st.session_state.get('rmi_file_path')
     merge_file_path = st.session_state.get('merged_file_path')
@@ -465,11 +476,11 @@ def compare_mineral_sources(compared_path, today_date):
         if st.button("查找"):
             find_smelter_id(smelter_id_to_find, rmi_df, merge_df, st)
     else:
-        st.error("請先在 '下載RMI列表並合併華邦檔案' 頁面處理檔案。")
+        st.error("請先在 '爬取RMI/合併華邦檔案' 頁面處理檔案。")
 
             
 def compare_general_versions():
-    st.header("比較 General 版本")
+    st.header("歷史紀錄比較")
     general_path = os.path.join(base_path, "merged")
     
     # 只選擇以 "General" 開頭的檔案
@@ -484,30 +495,64 @@ def compare_general_versions():
         if st.button("比較"):
             compare_versions(version_1, version_2, general_path, st)
 
-
 def main():
-    st.title("衝突礦產比對查詢平台")
-    st.header("請先設置一個系統資料夾，以放置本系統生成之檔案")
+    logo_path = "winbond.png"  # 替換成你的 logo 圖片路徑
+    col1, col2 = st.columns([2, 6])  # 調整列的寬度
+
+    with col1:
+        # 使用 PIL 打開圖片，確保圖片品質
+        logo = Image.open(logo_path)
+        st.image(logo, use_column_width=True) # 使用 st.image() 來顯示 logo
+
+    #with col2:
+        #st.title("🔍 衝突礦產比對查詢平台")  # 主標題s
+
+    st.markdown("<h2 style='text-align: left;'>🔍 衝突礦產比對查詢平台</h2>", unsafe_allow_html=True)
+    st.markdown('<h4 style="color:#4a4a4a;">請先設置一個系統資料夾，以放置本系統生成之檔案</h4>', unsafe_allow_html=True)
     st.markdown("""
-    在系統資料夾，放置以下資料：
-    - Chrome Driver
-        [下載連結](https://storage.googleapis.com/chrome-for-testing-public/127.0.6533.119/win64/chromedriver-win64.zip)
-    - RMI 提供 CMRT 空表格
+        在系統資料夾，放置以下資料：
+        - **Chrome Driver**
+            - [下載連結](https://storage.googleapis.com/chrome-for-testing-public/127.0.6533.119/win64/chromedriver-win64.zip)
+        - **RMI 提供 CMRT 空表格**
     """)
+    
+    # 路徑設置功能
     base_path, today_date, compared_path = setup_paths()
     if not base_path:
         st.info("輸入後，請按Enter送出路徑。")
         return
-    # 導航選項
-    navigation = st.sidebar.radio("選擇功能", ["下載RMI列表並合併華邦檔案", "比對華邦礦產地與RMI列表", "比較 General 版本"])
 
-    if navigation == "下載RMI列表並合併華邦檔案":
+    # 加載自定義 CSS
+    st.markdown('<style>' + open('./style.css').read() + '</style>', unsafe_allow_html=True)
+
+    with st.sidebar:
+        tabs = on_hover_tabs(tabName=['爬取RMI/合併華邦檔案', '比對華邦與RMI礦產地', '歷史紀錄比較'],
+                             iconName=['file_download', 'compare_arrows', 'assessment'],
+                             default_choice=0)
+
+    scroll_script = """
+        <script>
+            function scrollToBottom() {
+                window.scrollTo({top: document.body.scrollHeight, behavior: 'smooth'});
+            }
+            scrollToBottom();
+        </script>
+    """
+    
+    if tabs == '爬取RMI/合併華邦檔案':
+        st.markdown(scroll_script, unsafe_allow_html=True)
+        st.markdown("<div style='margin-top: 50px;'></div>", unsafe_allow_html=True)  
+        st.markdown("<div style='margin-down: 100px;'></div>", unsafe_allow_html=True)
         download_and_merge_files(base_path, today_date)
-
-    elif navigation == "比對華邦礦產地與RMI列表":
+    elif tabs == '比對華邦與RMI礦產地':
+        st.markdown(scroll_script, unsafe_allow_html=True)
+        st.markdown("<div style='margin-top: 50px;'></div>", unsafe_allow_html=True)  
+        st.markdown("<div style='margin-down: 100px;'></div>", unsafe_allow_html=True)
         compare_mineral_sources(compared_path, today_date)
-
-    elif navigation == "比較 General 版本":
+    elif tabs == '歷史紀錄比較':
+        st.markdown(scroll_script, unsafe_allow_html=True)
+        st.markdown("<div style='margin-top: 50px;'></div>", unsafe_allow_html=True)  
+        st.markdown("<div style='margin-down: 100px;'></div>", unsafe_allow_html=True)
         compare_general_versions()
 
 if __name__ == "__main__":
