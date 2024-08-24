@@ -375,8 +375,34 @@ def create_excel_files(merge_df, compared_path, today_date):
 
 def display_results(num_unmatched, unmatched_path, output_general_path, winbond_path, due_date_result_text, compare_result_text, num_matched, unmatched_data):
     st.subheader("🚨 Audit Date到期提醒（近30日）")
+    
     if due_date_result_text:
-        st.markdown(due_date_result_text, unsafe_allow_html=True)
+        lines = due_date_result_text.strip().split('\n')
+        data_list = []
+
+        # 使用正則表達式提取信息
+        for line in lines:
+            smelter_id_match = re.search(r"\*\*Smelter ID\*\*: (\w+)", line)
+            plant_name_match = re.search(r"\*\*煉製廠\*\*: ([^,]+)", line)
+            source_name_match = re.search(r"\*\*來源名稱\*\*: ([^,]+)", line)
+            due_date_match = re.search(r"\*\*到期日\*\*: (\d{4}-\d{2}-\d{2})", line)
+
+            if smelter_id_match and plant_name_match and source_name_match and due_date_match:
+                smelter_id = smelter_id_match.group(1)
+                plant_name = plant_name_match.group(1)
+                source_name = source_name_match.group(1).strip()
+                due_date = due_date_match.group(1)
+                
+                data_list.append({
+                    'Smelter ID': smelter_id,
+                    '煉製廠': plant_name,
+                    '來源名稱': source_name,
+                    '到期日': due_date
+                })
+
+        # 將結果轉換為 DataFrame
+        due_date_result_text = pd.DataFrame(data_list)
+        st.table(due_date_result_text)
     else:
         st.markdown("沒有即將到期的 Audit Date。")
 
